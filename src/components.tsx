@@ -1,126 +1,109 @@
-import { useStore } from "./store/store";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { focusAtom } from "jotai-optics";
+import { PrimitiveAtom } from "jotai/experimental";
+import { splitAtom } from "jotai/utils";
+import { OpticFor_ } from "optics-ts";
+import { useCallback } from "react";
+import { Actor } from "./store/actor";
+import { lineAtom } from "./store/line";
+import { Step } from "./store/step";
 
-export interface ActorProps {
-  viewId: string;
-  deleteActor: (viewId: string) => void;
-}
+export const ApprovalLine = () => {
+  const setLine = useSetAtom(lineAtom);
+  const stepAtoms = useAtomValue(splitAtom(lineAtom));
 
-export const ActorItem = (props: ActorProps) => {
-  const { getActor, updateName, updateValue } = useStore((state) => ({
-    getActor: state.getActor,
-    updateName: state.updateName,
-    updateValue: state.updateValue,
-  }));
-
-  const actor = getActor(props.viewId);
-  if (actor === undefined) {
-    return;
-  }
+  const handleAddStep = () => {
+    setLine((prev) => [
+      ...prev,
+      {
+        viewId: `${Math.random()}`,
+        actors: [],
+        step: prev.length,
+        status: "pending",
+      },
+    ]);
+  };
 
   return (
-    <div>
-      <p>{actor.viewId}</p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <button style={{ alignSelf: "flex-end" }} onClick={handleAddStep}>
+        add
+      </button>
+      <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+        {stepAtoms.map((stepAtom) => (
+          <StepItem key={stepAtom.toString()} stepAtom={stepAtom} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+type StepItemProps = {
+  stepAtom: PrimitiveAtom<Step>;
+};
+
+const focusActors = (optic: OpticFor_<Step>) => optic.prop("actors");
+
+const StepItem = (props: StepItemProps) => {
+  const setStep = useSetAtom(props.stepAtom);
+
+  const focus = focusAtom(props.stepAtom, focusActors);
+  const split = splitAtom(focus);
+
+  const actorAtoms = useAtomValue(split);
+
+  const handleAddActor = useCallback(() => {
+    setStep((prev) => ({
+      ...prev,
+      actors: [
+        ...prev.actors,
+        {
+          viewId: `${Math.random()}`,
+          name: "",
+          value: "",
+        },
+      ],
+    }));
+  }, [setStep]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        <h2>Step</h2>
+        <button style={{ alignSelf: "flex-end" }} onClick={handleAddActor}>
+          add
+        </button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        {actorAtoms.map((actorAtom) => (
+          <ActorItem key={`${actorAtom}`} actorAtom={actorAtom} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+type ActorItemProps = {
+  actorAtom: PrimitiveAtom<Actor>;
+};
+
+const ActorItem = (props: ActorItemProps) => {
+  const [actor, setActor] = useAtom(props.actorAtom);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <input
         value={actor.name}
-        onChange={(e) => updateName(e.target.value, actor.viewId)}
+        onChange={(e) =>
+          setActor((prev) => ({ ...prev, name: e.target.value }))
+        }
       />
       <input
         value={actor.value}
-        onChange={(e) => updateValue(e.target.value, actor.viewId)}
-      />
-    </div>
-  );
-};
-
-export interface StepProps {
-  viewId: string;
-  deleteStep: (viewId: string) => void;
-}
-
-export const StepItem = (props: StepProps) => {
-  const { getStep, updateStep, updateStatus, appendActor, deleteActor } =
-    useStore((state) => ({
-      getStep: state.getStep,
-      updateStep: state.updateStep,
-      updateStatus: state.updateStatus,
-      appendActor: state.appendActor,
-      deleteActor: state.deleteActor,
-    }));
-
-  const step = getStep(props.viewId);
-
-  if (step === undefined) {
-    return;
-  }
-
-  return (
-    <div>
-      <p>{step.viewId}</p>
-      <input
-        value={step.step}
-        onChange={(e) => updateStep(Number(e.target.value), step.viewId)}
-      />
-      <input
-        value={step.status}
-        onChange={(e) => updateStatus(e.target.value, step.viewId)}
-      />
-      <button
-        onClick={() =>
-          appendActor(
-            { name: "default", value: "", viewId: `${Date.now()}` },
-            step.viewId
-          )
+        onChange={(e) =>
+          setActor((prev) => ({ ...prev, value: e.target.value }))
         }
-      >
-        Add Actor
-      </button>
-      <div>
-        {step.actors.map((actor) => (
-          <ActorItem
-            key={actor.viewId}
-            viewId={actor.viewId}
-            deleteActor={deleteActor}
-          />
-        ))}
-      </div>
-    </div>
-  );
-};
-
-export interface ApprovalLineProps {}
-
-export const ApprovalLine = () => {
-  const { line, appendStep, deleteStep } = useStore((state) => ({
-    line: state.line,
-    appendStep: state.appendStep,
-    deleteStep: state.deleteStep,
-  }));
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <h1>Approval Line</h1>
-      <button
-        style={{ alignSelf: "flex-end" }}
-        onClick={() =>
-          appendStep({
-            viewId: `${Date.now()}`,
-            actors: [],
-            status: "new",
-            step: 10,
-          })
-        }
-      >
-        Add Step
-      </button>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {line.map((step) => (
-          <StepItem
-            key={step.viewId}
-            viewId={step.viewId}
-            deleteStep={deleteStep}
-          />
-        ))}
-      </div>
+      />
     </div>
   );
 };
